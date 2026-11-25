@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>LED 点阵屏 · 程序结构与流程图</title>
+<style>
+  @page { size: A4; margin: 14mm 13mm 15mm 13mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+    font-size: 10.2pt; color: #1f2430; line-height: 1.75; margin: 0;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+
+  /* ============ 封面 ============ */
+  .cover {
+    background: linear-gradient(135deg, #16233c 0%, #22406b 55%, #1c7ed6 100%);
+    color: #fff; border-radius: 14px; padding: 34px 30px 28px; margin-bottom: 24px;
+    page-break-inside: avoid;
+  }
+  .cover .kicker { font-size: 8.5pt; letter-spacing: 4px; color: #9fc4ee; margin: 0 0 12px; }
+  .cover h1 { font-size: 26pt; margin: 0 0 12px; font-weight: 700; letter-spacing: 1px; }
+  .cover .sub { font-size: 11pt; color: #cfe0f5; margin: 0 0 20px; }
+  .cover .meta { font-size: 9pt; color: #b9d2ee; line-height: 2; border-top: 1px solid rgba(255,255,255,.25); padding-top: 14px; }
+  .cover .meta b { color: #fff; font-weight: 600; display: inline-block; width: 3.6em; }
+
+  /* ============ 标题 ============ */
+  h2 {
+    font-size: 14.5pt; margin: 24px 0 12px; padding: 7px 0 7px 12px;
+    border-left: 5px solid #1c7ed6; background: linear-gradient(90deg,#eef4fc,#ffffff00);
+    color: #14243d; font-weight: 700; page-break-after: avoid;
+  }
+  h2 .no { color: #1c7ed6; margin-right: 8px; font-weight: 800; }
+  p { margin: 6px 0 10px; }
+  .note { color: #5b6675; font-size: 9.2pt; }
+
+  /* ============ 表格 ============ */
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 16px; font-size: 9.2pt; page-break-inside: avoid; }
+  th { background: #1c7ed6; color: #fff; font-weight: 600; text-align: left; padding: 8px 10px; }
+  td { padding: 7px 10px; border-bottom: 1px solid #e6ecf3; vertical-align: top; }
+  tr:nth-child(even) td { background: #f7fafd; }
+  code { font-family: "Cascadia Mono", Consolas, monospace; font-size: 8.6pt; background: #eef3f9; padding: 1px 5px; border-radius: 4px; }
+
+  /* ============ 框图组件 ============ */
+  .diagram { margin: 14px 0 8px; page-break-inside: avoid; }
+
+  .node {
+    border: 1.5px solid #9dc0e8; background: #f6faff; border-radius: 9px;
+    padding: 9px 12px; font-size: 9.2pt; font-weight: 600; color: #17324f;
+    text-align: center; line-height: 1.5;
+  }
+  .node span { display: block; font-weight: 400; font-size: 8.2pt; color: #5d7a99; margin-top: 2px; }
+  .node.accent { background: #e8f2fd; border-color: #5ba7e8; }
+
+  .frame {
+    border: 2px solid #1c7ed6; border-radius: 12px; background: #fbfdff;
+    padding: 12px 14px 14px; position: relative;
+  }
+  .frame > .cap {
+    position: absolute; top: -11px; left: 18px; background: #fff; padding: 0 8px;
+    font-size: 9pt; font-weight: 700; color: #1c7ed6; letter-spacing: .5px;
+  }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+
+  .srcrow { display: flex; justify-content: center; gap: 55px; }
+  .srcrow .node { width: 190px; }
+
+  .arw { text-align: center; color: #6b8cb0; font-size: 9pt; line-height: 1.25; margin: 3px 0; }
+  .arw .a { font-size: 13pt; line-height: 1; color: #1c7ed6; }
+
+  .stack { display: flex; flex-direction: column; gap: 3px; }
+  .mid { width: 260px; margin: 0 auto; }
+
+  /* 流程图 */
+  .flow { display: flex; flex-direction: column; align-items: center; page-break-inside: avoid; }
+  .flow .box {
+    border: 1.5px solid #9dc0e8; border-radius: 8px; background: #f6faff;
+    padding: 7px 14px; font-size: 9pt; text-align: center; min-width: 230px;
+    font-weight: 600; color: #17324f;
+  }
+  .flow .box span { display: block; font-weight: 400; font-size: 8pt; color: #5d7a99; }
+  .flow .cond { background: #fff8e6; border-color: #e8c46a; }
+  .flow .end { background: #eef7ee; border-color: #8fc98f; }
+
+  .branch { display: flex; gap: 12px; justify-content: center; width: 100%; margin-top: 4px; page-break-inside: avoid; }
+  .branch > div { flex: 1; display: flex; flex-direction: column; align-items: center; }
+  .branch .lbl { font-size: 8pt; color: #6b8cb0; margin-bottom: 2px; }
+
+  .cards { display: flex; gap: 10px; margin: 12px 0 18px; }
+  .card { flex: 1; background: #f7fafd; border: 1px solid #dfe8f2; border-radius: 10px; padding: 12px 14px; page-break-inside: avoid; }
+  .card h4 { margin: 0 0 6px; font-size: 10pt; color: #1c7ed6; }
+  .card ul { margin: 0; padding-left: 16px; font-size: 9pt; line-height: 1.7; }
+
+  .pb { page-break-before: always; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <p class="kicker">E S P 3 2 · H U B 7 5 E</p>
+  <h1>点阵屏程序结构与流程</h1>
+  <p class="sub">96 × 128 HUB75E 点阵屏 · 时钟 / 空气质量 / 电脑状态</p>
+  <div class="meta">
+    <div><b>工程</b>esp32s3_hub75 / ntp_clock_web.ino</div>
+    <div><b>平台</b>ESP32-WROOM-32 · arduino-esp32 2.0.17 · Huge APP 分区</div>
+    <div><b>数据源</b>192.168.1.27（空气质量）· 192.168.1.28（AIDA64）</div>
+    <div><b>占用</b>Flash 1.31 MB / 3 MB（41%）· RAM 48 KB / 320 KB</div>
+  </div>
+</div>
+
+<h2><span class="no">01</span>系统框图</h2>
+
+<div class="diagram">
+  <div class="srcrow">
+    <div class="node accent">空气质量传感器<span>192.168.1.27 · GET /data（JSON）</span></div>
+    <div class="node accent">电脑 AIDA64<span>192.168.1.28 · GET /sse（SSE 流）</span></div>
+  </div>
+
+  <div class="arw"><div class="a">▼</div>HTTP</div>
+
+  <div class="frame">
+    <div class="cap">ESP32-WROOM-32 · 240 MHz</div>
+    <div class="grid2">
+      <div class="node">WebServer : 80<span>/ 　/api/config 　/api/status</span></div>
+      <div class="node">采集层<span>fetchAir( ) 10s 　fetchPc( ) 1s 　回退探测 5s</span></div>
+      <div class="node">配置层 ＋ LittleFS<span>/index.html 　 /config.json</span></div>
+      <div class="node">解析层<span>jsonFloat / pcFeed 关键词匹配</span></div>
+    </div>
+    <div class="arw" style="margin-top:10px"><div class="a">▼</div></div>
+    <div class="node" style="margin:0 40px">渲染层<span>clockRender( ) 　airUpdate( ) 　pcUpdate( )　—　分区比较、局部刷新</span></div>
+  </div>
+
+  <div class="arw"><div class="a">▼</div>HUB75 · 14 根信号线</div>
+  <div class="mid stack">
+    <div class="node">74HCT245 × 2<span>3.3 V → 5 V 电平转换</span></div>
+    <div class="arw"><div class="a">▼</div></div>
+    <div class="node">96 × 128 面板<span>2 × 96×64 模组，1/32 扫描</span></div>
+  </div>
+</div>
+
+<p class="note">ESP32 同时扮演两个角色：对外是 Web 服务端（浏览器配置），对内是 HTTP 客户端（拉传感器与 AIDA64）。三路外部角色互不干扰。</p>
+
+<h2><span class="no">02</span>主循环流程</h2>
+
+<div class="flow">
+  <div class="box">loop()</div>
+  <div class="arw"><div class="a">▼</div></div>
+  <div class="box">server.handleClient()<span>处理网页请求</span></div>
+  <div class="arw"><div class="a">▼</div></div>
+  <div class="box">每 10 秒检查 WiFi<span>掉线则 reconnect</span></div>
+  <div class="arw"><div class="a">▼</div></div>
+  <div class="box cond">getLocalTime() 有效？<span>无效 → delay(50) → 返回</span></div>
+  <div class="arw"><div class="a">▼</div>有效</div>
+  <div class="box cond">在开屏时间窗内？<span>关屏 → 清屏、亮度 0 → 返回</span></div>
+  <div class="arw"><div class="a">▼</div>开屏</div>
+  <div class="box" style="min-width:300px">按 cfg.mode 分发</div>
+  <div class="arw"><div class="a">▼</div></div>
+
+  <div class="branch">
+    <div>
+      <div class="lbl">mode 0</div>
+      <div class="box" style="min-width:0">时钟<span>clockRender()</span></div>
+      <div class="arw" style="font-size:8pt;margin-top:4px">日期（跨天）<br>时间（分钟）<br>秒 + 进度条</div>
+    </div>
+    <div>
+      <div class="lbl">mode 1</div>
+      <div class="box" style="min-width:0">空气质量<span>到点 fetchAir()</span></div>
+      <div class="arw" style="font-size:8pt;margin-top:4px">解析 JSON<br>airUpdate()<br>四区比较重绘</div>
+    </div>
+    <div>
+      <div class="lbl">mode 2</div>
+      <div class="box" style="min-width:0">电脑状态<span>到点 fetchPc()</span></div>
+      <div class="arw" style="font-size:8pt;margin-top:4px">解析 SSE<br>超时 → 回退时钟<br>正常 → pcUpdate()</div>
+    </div>
+  </div>
+
+  <div class="arw" style="margin-top:8px"><div class="a">▼</div></div>
+  <div class="box end">delay(20)　→　回到 loop 开头</div>
+</div>
+
+<h2 class="pb"><span class="no">03</span>模式状态机</h2>
+
+<div class="diagram">
+  <div class="srcrow">
+    <div class="node">mode = 0<span>时钟</span></div>
+    <div class="node">mode = 1<span>空气质量</span></div>
+    <div class="node">mode = 2<span>电脑状态</span></div>
+  </div>
+  <div class="arw" style="margin-top:6px">▲　网页 POST /api/config 切换　▲</div>
+
+  <div class="frame" style="margin-top:16px">
+    <div class="cap">mode 2 内部状态</div>
+    <div class="grid2">
+      <div class="node">正常：显示电脑数据<span>每 1 秒采集一次</span></div>
+      <div class="node">回退：显示时钟<span>15 秒无数据触发，探测 5 秒一次</span></div>
+    </div>
+    <div class="arw" style="margin-top:10px">
+      <div class="a">◀　　▶</div>
+      15 s 无数据 ／ 数据恢复
+    </div>
+  </div>
+</div>
+
+<p class="note">回退只改变「画什么」，不改变 <code>cfg.mode</code>。网页上仍显示「电脑状态」，数据一回来会自动切回，用户无需任何操作。</p>
+
+<h2><span class="no">04</span>分层说明</h2>
+<table>
+  <tr><th style="width:13%">层</th><th style="width:38%">函数</th><th>职责</th></tr>
+  <tr><td>驱动层</td><td><code>MatrixPanel_I2S_DMA</code><br><code>VirtualMatrixPanel</code></td><td>HUB75 时序、1/32 扫描、<code>setRotate(true)</code> 横屏</td></tr>
+  <tr><td>绘图原语</td><td><code>drawTextGap</code> <code>drawTextLeft</code><br><code>textW</code> <code>charWidth</code> <code>drawTempStr</code></td><td>逐字绘制、1px 字间距、按区域居中或左对齐、手绘度数圈</td></tr>
+  <tr><td>渲染层</td><td><code>clockRender</code> <code>airUpdate</code> <code>pcUpdate</code></td><td>分区比较，只重绘变化区域</td></tr>
+  <tr><td>解析层</td><td><code>jsonFloat</code> <code>pcFeed</code> <code>parsePcPayload</code></td><td>从 JSON / SSE / HTML 里按关键词取值</td></tr>
+  <tr><td>采集层</td><td><code>fetchAir</code> <code>fetchPc</code></td><td>HTTP 拉取，带超时与重试</td></tr>
+  <tr><td>配置层</td><td><code>loadConfig</code> <code>saveConfig</code></td><td>LittleFS 读写 <code>config.json</code></td></tr>
+  <tr><td>服务层</td><td><code>setupWeb</code> <code>serveIndex</code></td><td>配置网页 + REST 接口</td></tr>
+</table>
+
+<h2><span class="no">05</span>刷新策略</h2>
+<p class="note">核心原则：任何情况下都不整屏清空，只有切模式 / 回退切换时才 <code>fillScreen(0)</code> 一次。</p>
+<table>
+  <tr><th style="width:12%">画面</th><th style="width:26%">区域</th><th style="width:32%">重绘条件</th><th>清除范围</th></tr>
+  <tr><td>时钟</td><td>日期 + 星期</td><td>跨天</td><td>16 px 条</td></tr>
+  <tr><td>时钟</td><td>时间 HH:MM</td><td>分钟变化</td><td>48 px 条</td></tr>
+  <tr><td>时钟</td><td>秒 + 进度条</td><td>每秒</td><td>16 px + 增量条</td></tr>
+  <tr><td>空气</td><td>PM2.5 标题</td><td>切模式</td><td>16 px</td></tr>
+  <tr><td>空气</td><td>PM2.5 数值</td><td>值变化</td><td>48 px</td></tr>
+  <tr><td>空气</td><td>CO2 行</td><td>CO2 变化</td><td>16 px</td></tr>
+  <tr><td>空气</td><td>温湿度行</td><td>温湿度变化</td><td>16 px</td></tr>
+  <tr><td>电脑</td><td>六行独立</td><td>各行文本变化</td><td>各 16 px</td></tr>
+</table>
+
+<h2><span class="no">06</span>时间参数</h2>
+<table>
+  <tr><th style="width:34%">参数</th><th style="width:20%">默认</th><th>说明</th></tr>
+  <tr><td><code>cfg.airRefresh</code></td><td>10 s</td><td>空气质量采集间隔</td></tr>
+  <tr><td><code>cfg.pcRefresh</code></td><td>1 s</td><td>电脑状态采集间隔</td></tr>
+  <tr><td><code>PC_STALE_MS</code></td><td>15 s</td><td>多久没数据算掉线，同时是回退阈值</td></tr>
+  <tr><td><code>PC_RETRY_MS</code></td><td>5 s</td><td>回退期间的探测间隔</td></tr>
+  <tr><td>快速探测超时</td><td>250 ms</td><td>连接 + 读取，探测模式不重试</td></tr>
+  <tr><td>正常抓取超时</td><td>1500 / 800 ms</td><td>连接 / 读取，失败重试一次</td></tr>
+</table>
+
+<h2 class="pb"><span class="no">07</span>设计取舍</h2>
+<div class="cards">
+  <div class="card">
+    <h4>为什么逐字绘制</h4>
+    <ul>
+      <li>换成 gb2312 字体库后字宽会变</li>
+      <li>按实测字宽排版，不会错位</li>
+      <li>字间距可控，数字不粘连</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>为什么不整屏重画</h4>
+    <ul>
+      <li>单缓冲，清屏期间整屏是黑的</li>
+      <li>分区比较 + 局部清除</li>
+      <li>画面稳定，不闪烁</li>
+    </ul>
+  </div>
+</div>
+<div class="cards">
+  <div class="card">
+    <h4>为什么回退要降频</h4>
+    <ul>
+      <li>目标不可达时 connect 会长时间阻塞</li>
+      <li>阻塞会拖垮时钟刷新</li>
+      <li>改成 5 s 探测 + 250 ms 超时</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>为什么解析不写死字段</h4>
+    <ul>
+      <li>AIDA64 项目顺序可自定义</li>
+      <li>按「使用率 / 温度 / 上传」等关键词匹配</li>
+      <li>换配置不用改固件</li>
+    </ul>
+  </div>
+</div>
+
+<h2><span class="no">08</span>资源占用</h2>
+<table>
+  <tr><th style="width:30%">项目</th><th>数值</th></tr>
+  <tr><td>Flash</td><td>1.31 MB / 3 MB（41%，Huge APP 分区）</td></tr>
+  <tr><td>全局 RAM</td><td>48 KB / 320 KB</td></tr>
+  <tr><td>堆剩余</td><td>约 279 KB</td></tr>
+  <tr><td>主循环周期</td><td>约 20 ~ 70 ms（无阻塞网络时）</td></tr>
+</table>
+
+</body>
+</html>

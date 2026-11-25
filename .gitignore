@@ -1,0 +1,27 @@
+# ---- 凭据（绝不提交）----
+secrets.h
+*.secret
+.env
+
+# ---- 构建产物 ----
+build/
+*.bin
+*.elf
+*.map
+*.hex
+*.d
+*.o
+*.a
+
+# ---- Arduino / 编辑器 ----
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# ---- 抓包与临时文件 ----
+*.csv
+*.sr
+_crop/
+_tmp/
