@@ -3,9 +3,10 @@
 //
 //  功能：
 //   1. 整屏纯色：红 / 绿 / 蓝 / 白 / 黑 / 青 / 品红 / 黄 / 灰度
-//   2. 逐行、逐列、逐点定位扫描（手动或自动）
-//   3. 网页控制，可选反色（黑底亮点 / 白底黑点）
-//   4. 自动切换延时、区间范围、步长均可配置
+//   2. 框选区域：任意矩形，可整块点亮
+//   3. 在框选范围内逐行、逐列、逐点扫描（手动或自动）
+//   4. 网页控制，可选反色、十字辅助、亮度
+//   5. 自动切换延时、区间范围、步长均可配置
 //
 //  硬件：ESP32-WROOM-32 + 96×128 面板（2 块 96×64 竖向级联，1/32 扫）
 //  引脚：R1=25 G1=26 B1=27 R2=14 G2=12 B2=13 A=23 B=19 C=5 D=17 E=32
@@ -37,7 +38,6 @@
   #define SCR_H 128
 #endif
 
-// 虚拟屏尺寸（未旋转）
 #define VIRT_W (NUM_COLS * PANEL_RES_X)
 #define VIRT_H (NUM_ROWS * PANEL_RES_Y)
 
@@ -73,8 +73,7 @@
 class LogicalPanel : public MatrixPanel_I2S_DMA {
 public:
   explicit LogicalPanel(const HUB75_I2S_CFG &cfg) : MatrixPanel_I2S_DMA(cfg) {
-    // 基类按 DMA 尺寸（192×64）初始化 GFX，会把 y >= 64 的绘制全裁掉，
-    // 所以这里改回逻辑尺寸。
+    // 基类按 DMA 尺寸（192×64）初始化 GFX，会把 y >= 64 的绘制全裁掉
     _width  = SCR_W;
     _height = SCR_H;
   }
@@ -128,29 +127,33 @@ WebServer server(80);
 // ============================================================
 enum TestMode : uint8_t {
   MODE_COLOR = 0,   // 整屏纯色
-  MODE_ROW   = 1,   // 逐行
-  MODE_COL   = 2,   // 逐列
-  MODE_PIXEL = 3    // 逐点
+  MODE_ROW   = 1,   // 框选范围内逐行
+  MODE_COL   = 2,   // 框选范围内逐列
+  MODE_PIXEL = 3,   // 框选范围内逐点
+  MODE_BOX   = 4    // 框选范围整块点亮
 };
 
 struct State {
   uint8_t  mode      = MODE_COLOR;
-  uint8_t  colorIdx  = 0;      // 纯色序号
-  uint32_t delayMs   = 800;    // 自动切换延时
-  int32_t  from      = 0;      // 区间起点
-  int32_t  to        = 0;      // 区间终点（含）
-  int32_t  idx       = 0;      // 当前索引
-  int32_t  step      = 1;      // 步长
-  bool     running   = false;  // 自动播放
-  bool     invert    = false;  // 反色：黑底亮点 / 白底黑点
-  bool     crosshair = false;  // 逐点模式画十字辅助
-  uint8_t  bright    = 25;     // 默认低亮度：全白满亮约 4A，USB 供电撑不住
+  uint8_t  colorIdx  = 0;
+  uint32_t delayMs   = 800;
+  int32_t  from      = 0;
+  int32_t  to        = 0;
+  int32_t  idx       = 0;
+  int32_t  step      = 1;
+  bool     running   = false;
+  bool     invert    = false;
+  bool     crosshair = false;
+  uint8_t  bright    = 25;
+
+  // 框选区域（含端点）
+  int16_t  rx0 = 0, ry0 = 0;
+  int16_t  rx1 = SCR_W - 1, ry1 = SCR_H - 1;
 };
 
 State st;
 uint32_t lastTick = 0;
 
-// 纯色调色板
 struct NamedColor { const char* name; uint8_t r, g, b; };
 const NamedColor PALETTE[] = {
   { "红",  255,   0,   0 },
@@ -171,17 +174,30 @@ inline uint16_t rgbOf(const NamedColor &c) {
   return display->color565(c.r, c.g, c.b);
 }
 
-// 各模式的元素总数
+// ---------------- 框选尺寸 ----------------
+inline int16_t rectW() { return st.rx1 - st.rx0 + 1; }
+inline int16_t rectH() { return st.ry1 - st.ry0 + 1; }
+
+void clampRect() {
+  if (st.rx0 < 0) st.rx0 = 0;
+  if (st.ry0 < 0) st.ry0 = 0;
+  if (st.rx1 > SCR_W - 1) st.rx1 = SCR_W - 1;
+  if (st.ry1 > SCR_H - 1) st.ry1 = SCR_H - 1;
+  if (st.rx1 < st.rx0) st.rx1 = st.rx0;
+  if (st.ry1 < st.ry0) st.ry1 = st.ry0;
+}
+
+// 各模式的元素总数（索引均相对于框选区域）
 int32_t modeCount(uint8_t m) {
   switch (m) {
-    case MODE_ROW:   return SCR_H;
-    case MODE_COL:   return SCR_W;
-    case MODE_PIXEL: return (int32_t)SCR_W * SCR_H;
+    case MODE_ROW:   return rectH();
+    case MODE_COL:   return rectW();
+    case MODE_PIXEL: return (int32_t)rectW() * rectH();
+    case MODE_BOX:   return 1;
     default:         return PALETTE_N;
   }
 }
 
-// 把区间约束到合法范围
 void clampRange() {
   int32_t n = modeCount(st.mode);
   if (st.from < 0) st.from = 0;
@@ -196,56 +212,56 @@ void clampRange() {
 //  绘制
 // ============================================================
 void render() {
+  clampRect();
   clampRange();
 
   uint16_t fg, bg;
   if (st.mode == MODE_COLOR) {
-    const NamedColor &c = PALETTE[st.colorIdx % PALETTE_N];
-    fg = rgbOf(c);
+    fg = rgbOf(PALETTE[st.colorIdx % PALETTE_N]);
     bg = fg;
   } else {
-    // 逐行/列/点：默认黑底白点，反色则白底黑点
     fg = st.invert ? display->color565(0, 0, 0)       : display->color565(255, 255, 255);
     bg = st.invert ? display->color565(255, 255, 255) : display->color565(0, 0, 0);
   }
 
   display->fillScreen(bg);
 
+  int16_t w = rectW(), h = rectH();
+
   switch (st.mode) {
+    case MODE_BOX:
+      display->fillRect(st.rx0, st.ry0, w, h, fg);
+      break;
+
     case MODE_ROW:
-      if (st.idx >= 0 && st.idx < SCR_H)
-        display->fillRect(0, st.idx, SCR_W, 1, fg);
+      if (st.idx >= 0 && st.idx < h)
+        display->fillRect(st.rx0, st.ry0 + st.idx, w, 1, fg);
       break;
 
     case MODE_COL:
-      if (st.idx >= 0 && st.idx < SCR_W)
-        display->fillRect(st.idx, 0, 1, SCR_H, fg);
+      if (st.idx >= 0 && st.idx < w)
+        display->fillRect(st.rx0 + st.idx, st.ry0, 1, h, fg);
       break;
 
     case MODE_PIXEL: {
-      if (st.idx < 0 || st.idx >= (int32_t)SCR_W * SCR_H) break;
-      int16_t px = st.idx % SCR_W;
-      int16_t py = st.idx / SCR_W;
+      if (st.idx < 0 || st.idx >= (int32_t)w * h) break;
+      int16_t px = st.rx0 + (st.idx % w);
+      int16_t py = st.ry0 + (st.idx / w);
 
       if (st.crosshair) {
-        // 十字辅助线：方便在 12288 个点里定位，颜色取反以免混淆
         uint16_t mark = st.invert ? display->color565(0, 0, 255)
                                   : display->color565(0, 60, 160);
-        display->drawFastHLine(0, py, SCR_W, mark);
-        display->drawFastVLine(px, 0, SCR_H, mark);
-        uint16_t cross = st.invert ? display->color565(0, 0, 0)
-                                   : display->color565(255, 255, 255);
-        display->fillRect(px, py, 1, 1, cross);
-      } else {
-        display->fillRect(px, py, 1, 1, fg);
+        display->drawFastHLine(st.rx0, py, w, mark);
+        display->drawFastVLine(px, st.ry0, h, mark);
       }
+      display->fillRect(px, py, 1, 1, fg);
       break;
     }
   }
 }
 
 // ============================================================
-//  步进
+//  步进（索引相对于框选区域，支持环绕）
 // ============================================================
 void stepBy(int32_t delta) {
   if (st.step < 1) st.step = 1;
@@ -255,7 +271,6 @@ void stepBy(int32_t delta) {
   int32_t span = hi - lo + 1;
   if (span <= 0) { st.idx = lo; render(); return; }
 
-  // 归一到 [lo, hi]：支持负向、跨区间、步长大于区间的情况
   int64_t n = (int64_t)st.idx + (int64_t)delta * st.step - lo;
   int64_t m = n % span;
   if (m < 0) m += span;
@@ -264,7 +279,7 @@ void stepBy(int32_t delta) {
   render();
 }
 
-// 切换模式：重置区间为全范围
+// 切换模式：区间重置为整个框选范围
 void setMode(uint8_t m) {
   st.mode = m;
   st.from = 0;
@@ -274,8 +289,19 @@ void setMode(uint8_t m) {
   render();
 }
 
+// 修改框选：区间跟着重置
+void setRect(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
+  st.rx0 = x0; st.ry0 = y0;
+  st.rx1 = x1; st.ry1 = y1;
+  clampRect();
+  st.from = 0;
+  st.to   = modeCount(st.mode) - 1;
+  st.idx  = 0;
+  render();
+}
+
 // ============================================================
-//  极简 JSON 取值
+//  极简 JSON
 // ============================================================
 static bool jsonNum(const String& s, const char* key, long& out) {
   String pat = String("\"") + key + "\"";
@@ -299,8 +325,6 @@ static bool jsonBool(const String& s, const char* key, bool& out) {
   i = s.indexOf(':', i + pat.length());
   if (i < 0) return false;
   i++;
-
-  // 取该键之后、下一个逗号/右括号之前的内容，避免误读别的键
   int e = i;
   while (e < (int)s.length() && s[e] != ',' && s[e] != '}') e++;
   String v = s.substring(i, e);
@@ -326,14 +350,27 @@ String stateJson() {
   s += ",\"invert\":"   + String(st.invert ? "true" : "false");
   s += ",\"crosshair\":"+ String(st.crosshair ? "true" : "false");
   s += ",\"bright\":"   + String(st.bright);
-  int32_t n = modeCount(st.mode);
-  s += ",\"count\":"    + String(n);
-  if (st.mode == MODE_PIXEL) {
-    s += ",\"px\":" + String(st.idx % SCR_W);
-    s += ",\"py\":" + String(st.idx / SCR_W);
-  } else {
-    s += ",\"px\":-1,\"py\":-1";
+  s += ",\"rx0\":"      + String(st.rx0);
+  s += ",\"ry0\":"      + String(st.ry0);
+  s += ",\"rx1\":"      + String(st.rx1);
+  s += ",\"ry1\":"      + String(st.ry1);
+  s += ",\"count\":"    + String(modeCount(st.mode));
+
+  // 当前元素的实际屏幕坐标
+  int16_t px = -1, py = -1;
+  int16_t w = rectW(), h = rectH();
+  switch (st.mode) {
+    case MODE_ROW:   py = st.ry0 + st.idx; break;
+    case MODE_COL:   px = st.rx0 + st.idx; break;
+    case MODE_PIXEL:
+      if (st.idx >= 0 && st.idx < (int32_t)w * h) {
+        px = st.rx0 + (st.idx % w);
+        py = st.ry0 + (st.idx / w);
+      }
+      break;
+    case MODE_BOX:   px = st.rx0; py = st.ry0; break;
   }
+  s += ",\"px\":" + String(px) + ",\"py\":" + String(py);
   s += "}";
   return s;
 }
@@ -347,10 +384,18 @@ void setupWeb() {
     server.send(200, "application/json", stateJson());
   });
 
-  // 修改配置
   server.on("/api/set", HTTP_POST, []() {
     String b = server.arg("plain");
     long v;
+
+    // 框选：只要有任意一个端点变化就整体重设
+    bool rectChanged = false;
+    long x0 = st.rx0, y0 = st.ry0, x1 = st.rx1, y1 = st.ry1;
+    if (jsonNum(b, "rx0", v)) { x0 = v; rectChanged = true; }
+    if (jsonNum(b, "ry0", v)) { y0 = v; rectChanged = true; }
+    if (jsonNum(b, "rx1", v)) { x1 = v; rectChanged = true; }
+    if (jsonNum(b, "ry1", v)) { y1 = v; rectChanged = true; }
+    if (rectChanged) setRect((int16_t)x0, (int16_t)y0, (int16_t)x1, (int16_t)y1);
 
     if (jsonNum(b, "mode", v)) {
       if ((uint8_t)v != st.mode) setMode((uint8_t)v);
@@ -360,13 +405,13 @@ void setupWeb() {
       if (st.mode == MODE_COLOR) st.idx = st.colorIdx;
     }
     if (jsonNum(b, "delay", v))  st.delayMs = constrain(v, 50, 60000);
-    if (jsonNum(b, "step", v))   st.step    = constrain(v, 1, 4096);
+    if (jsonNum(b, "step", v))   st.step    = constrain(v, 1, 65535);
+    if (jsonNum(b, "from", v))   st.from    = v;
+    if (jsonNum(b, "to", v))     st.to      = v;
     if (jsonNum(b, "bright", v)) {
       st.bright = constrain(v, 1, 255);
       display->setBrightness8(st.bright);
     }
-    if (jsonNum(b, "from", v))   st.from    = v;
-    if (jsonNum(b, "to", v))     st.to      = v;
 
     bool bv;
     if (jsonBool(b, "running", bv))   st.running   = bv;
@@ -379,7 +424,6 @@ void setupWeb() {
     server.send(200, "application/json", stateJson());
   });
 
-  // 手动步进
   server.on("/api/step", HTTP_POST, []() {
     String b = server.arg("plain");
     long d = 1;
@@ -389,7 +433,6 @@ void setupWeb() {
     server.send(200, "application/json", stateJson());
   });
 
-  // 直接跳转
   server.on("/api/goto", HTTP_POST, []() {
     String b = server.arg("plain");
     long v;
@@ -435,7 +478,6 @@ void setup() {
   display->setBrightness8(st.bright);
   display->fillScreen(0);
 
-  // 联网
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
@@ -447,14 +489,14 @@ void setup() {
   if (WiFi.status() == WL_CONNECTED) {
     Serial.print("IP: "); Serial.println(WiFi.localIP());
   } else {
-    Serial.println("未连上 WiFi，网页不可用（本地按键逻辑仍可扩展）");
+    Serial.println("未连上 WiFi，网页不可用");
   }
 
   setupWeb();
 
-  // 开机先给一个明显的白屏，便于确认亮度和接线
+  // 开机画面：灰 50，避免全白把 USB 供电拉垮
   st.mode = MODE_COLOR;
-  st.colorIdx = 9;               // 灰50（开机全白容易把 USB 供电拉垮）
+  st.colorIdx = 9;
   st.from = 0;
   st.to   = PALETTE_N - 1;
   st.idx  = st.colorIdx;
@@ -469,12 +511,10 @@ void loop() {
     lastTick = millis();
 
     if (st.mode == MODE_COLOR) {
-      // 纯色模式：在颜色之间循环
-      int32_t n = PALETTE_N;
-      st.colorIdx = (st.colorIdx + 1) % n;
+      st.colorIdx = (st.colorIdx + 1) % PALETTE_N;
       st.idx = st.colorIdx;
       render();
-    } else {
+    } else if (st.mode != MODE_BOX) {
       stepBy(1);
     }
   }
