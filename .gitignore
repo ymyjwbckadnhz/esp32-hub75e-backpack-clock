@@ -5,6 +5,8 @@ secrets.h
 
 # ---- 构建产物 ----
 build/
+_build/
+*.log
 *.bin
 *.elf
 *.map
