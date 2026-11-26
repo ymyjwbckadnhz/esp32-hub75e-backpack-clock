@@ -166,15 +166,28 @@ const char* NTP2 = "cn.pool.ntp.org";
 const char* NTP3 = "pool.ntp.org";
 
 // ---------------- 配置 ----------------
+// 数据源默认地址：优先用 secrets.h 里的（本机真实地址），
+// 没有就用占位值，这样公开仓库不会泄漏内网 IP。
+#if __has_include("secrets.h")
+  #include "secrets.h"
+#endif
+
+#ifndef DEFAULT_SENSOR_URL
+  #define DEFAULT_SENSOR_URL "http://192.168.1.27/data"
+#endif
+#ifndef DEFAULT_PC_URL
+  #define DEFAULT_PC_URL     "http://192.168.1.28/sse"
+#endif
+
 struct Config {
   uint8_t  bright     = 20;      // 0-255
   uint8_t  onH        = 7,  onM  = 0;
   uint8_t  offH       = 23, offM = 0;
   uint8_t  mode       = 0;       // 0=时钟 1=空气质量
   uint16_t airRefresh = 60;      // 秒
-  char     sensor[64] = "http://192.168.1.27/data";
+  char     sensor[64] = DEFAULT_SENSOR_URL;
   uint16_t pcRefresh  = 1;       // 秒
-  char     pcUrl[64]  = "http://192.168.1.28/sse";
+  char     pcUrl[64]  = DEFAULT_PC_URL;
 };
 
 Config cfg;

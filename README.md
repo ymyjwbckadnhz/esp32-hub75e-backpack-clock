@@ -105,7 +105,16 @@ cp src/ntp_clock_bmpfont/secrets.h.example src/ntp_clock_bmpfont/secrets.h
 # 填入自己的 WiFi SSID / 密码
 ```
 
-`secrets.h` 已在 `.gitignore` 中。没有它也能编译，只是连不上网。
+`secrets.h` 已在 `.gitignore` 中。没有它也能编译（用占位值），只是连不上网。
+
+数据源默认地址也放在 `secrets.h` 里，避免内网 IP 进公开仓库：
+
+```c
+#define DEFAULT_SENSOR_URL "http://10.0.0.27/data"
+#define DEFAULT_PC_URL     "http://10.0.0.28/sse"
+```
+
+不定义就用 `192.168.1.x` 占位；运行时还可以在网页上随时改，存进 LittleFS。
 
 ---
 
@@ -287,3 +296,17 @@ arduino-cli compile --fqbn esp32:esp32:esp32:PartitionScheme=min_spiffs `
 
 `OTA_PASSWORD` 明文写在源码里，仅用于防止误刷，**不是安全凭证**。
 公网环境请自行更换并考虑加 mDNS 隔离。
+### ⚠️ 换分区会清空 LittleFS
+
+从 `huge_app` 切到 `min_spiffs` 是**整表重写**，`/config.json` 和 `/index.html` 都会没。
+重新上电后：
+
+- `index.html` 会自动重新写入（首次开机检测）
+- **配置回到默认值**：亮度、开关屏时间、数据源地址
+
+如果发现数据源变成 `192.168.1.x` 拉不到数据，去网页改一次地址即可；
+或在 `secrets.h` 里定义 `DEFAULT_SENSOR_URL` / `DEFAULT_PC_URL`，让默认值就是对的。
+
+> 注意：`loadConfig()` 只在 `/config.json` **不存在**时才用默认值。
+> 如果之前已经生成过 config.json（哪怕内容是占位地址），改代码里的默认值不会生效，
+> 需要网页改一次、或格式化 LittleFS。
