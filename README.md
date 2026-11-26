@@ -96,7 +96,7 @@ docs/
 - 库：`ESP32 HUB75 LED MATRIX PANEL DMA Display` **3.1.0**（原版，无需改库）
 - 库：`Adafruit GFX Library` **官方版即可**
 - 开发板：`ESP32 Dev Module`
-- 分区：**Huge APP (3MB No OTA/1MB SPIFFS)**
+- 分区：**Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)** ← 支持 OTA，别用 huge_app
 
 ### 凭据
 
@@ -233,3 +233,57 @@ GPLv2+（含字体嵌入例外）／OFL-1.1，商用或再分发前请自行确�
 
 改框选会重置区间和索引，避免旧的 from/to 落到新范围之外。
 越界或反向框（x1 < x0）会被自动钳制成合法值。
+---
+
+## 无线升级（Arduino OTA）
+
+主程序内置 ArduinoOTA，密码 `2018aptx`，主机名 `led-backpack`。
+
+### ⚠️ 分区必须支持 OTA
+
+`huge_app` 只有一块 app 分区，**OTA 会直接失败**。本项目用：
+
+```
+PartitionScheme = min_spiffs   (1.9MB APP ×2 + 190KB SPIFFS)
+```
+
+从 `huge_app` 换成 `min_spiffs` 需要 **USB 重刷一次**，之后就能全程无线升级。
+
+### 升级方式
+
+**Arduino IDE**：工具 → 端口 → 选 `led-backpack` 或 `led-backpack.local`（网络端口），
+输密码后正常点上传。
+
+**命令行**（不插 USB）：
+
+```powershell
+# 先编译出 bin
+arduino-cli compile --fqbn esp32:esp32:esp32:PartitionScheme=min_spiffs `
+  --build-path .\_build src\ntp_clock_bmpfont
+
+# 再用 espota 推送
+& "$env:LOCALAPPDATA\Arduino15\packages\esp32\hardware\esp32\3.3.12\tools\espota.exe" `
+  -i <设备IP> -p 3232 -a 2018aptx -f .\_build\ntp_clock_bmpfont.ino.bin -r
+```
+
+`-r` 表示上传完自动重启。
+
+### 升级时屏幕会显示
+
+`OTA UPDATE` + 百分比 + 进度条；失败显示 `OTA FAIL`，完成显示 `OTA DONE`。
+升级过程中暂停常规刷新，不会和进度画面打架。
+
+### 注意事项
+
+- **端口 3232 是 UDP，不是 TCP**。用 `telnet`/TCP 去探测会显示"拒绝连接"，
+  这并不代表 OTA 不可用——新版 esp32 核心的 OTA 邀请走 UDP，真正的数据传输
+  用另外协商出的 TCP 端口。
+- **设备拉数据时会阻塞主循环**（最长 4s），期间可能错过 OTA 的 UDP 邀请，
+  表现为 `espota` 报 `No response from device`。代码里已在阻塞点前后补了
+  `ArduinoOTA.handle()`；若仍失败，重试一次即可。
+- 升级需要设备与电脑同一网段，且设备已连上 WiFi。
+
+### 关于密码
+
+`OTA_PASSWORD` 明文写在源码里，仅用于防止误刷，**不是安全凭证**。
+公网环境请自行更换并考虑加 mDNS 隔离。

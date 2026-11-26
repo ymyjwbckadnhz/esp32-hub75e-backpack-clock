@@ -16,6 +16,7 @@
 #include <WebServer.h>
 #include <LittleFS.h>
 #include <HTTPClient.h>
+#include <ArduinoOTA.h>
 #include <time.h>
 // 只包含"干净"的基础头文件：不含 Fonts/、不调用 setFont，
 // 因此可以配合任何精简版 Adafruit GFX（含 gb2312 汉化版），无需改库。
@@ -632,7 +633,11 @@ void fetchAir() {
     return;
   }
 
+  // 拉数据是阻塞的（最长 4s），期间主循环停摆会错过 OTA 的 UDP 邀请，
+  // 所以在之前先处理一次，提升 OTA 成功率。
+  ArduinoOTA.handle();
   int code = http.GET();
+  ArduinoOTA.handle();
   if (code != 200) {
     Serial.printf("[air] HTTP %d\n", code);
     air.ok = false;
@@ -801,6 +806,7 @@ bool parseUrl(const String& url, String& host, uint16_t& port, String& path) {
 bool pcFetchOnce(const String& host, uint16_t port, const String& path, String& body,
                  uint32_t readMs = 800, int32_t connMs = 1500) {
   WiFiClient cli;
+  ArduinoOTA.handle();                 // 连接前先处理一次 OTA 邀请
   if (!cli.connect(host.c_str(), port, connMs)) return false;
 
   cli.print(String("GET ") + path + " HTTP/1.1\r\n"
@@ -1168,6 +1174,76 @@ void setupWeb() {
 }
 
 // ============================================================
+//  Arduino OTA 无线升级
+//
+//  ⚠️ 分区要求：必须用带 OTA 的分区方案（本项目用 Min SPIFFS，1.9MB APP ×2）。
+//     huge_app / no_ota 没有备份 app 分区，OTA 会直接失败。
+//     从 huge_app 换成 min_spiffs 需要 USB 重刷一次，之后就能无线升级了。
+// ============================================================
+#define OTA_HOSTNAME "led-backpack"
+#define OTA_PASSWORD "2018aptx"
+
+bool otaActive = false;
+
+// OTA 期间在屏上显示进度，避免和正常刷新打架
+void otaShow(const char* line, int percent) {
+  display->fillScreen(0);
+  drawTextGap(line, 0, 20, SCR_W, 16, display->color565(255, 255, 255));
+
+  if (percent >= 0) {
+    char b[8];
+    sprintf(b, "%d", percent);
+    drawTextGap(b, 0, 40, SCR_W, 32, display->color565(0, 200, 255));
+
+    int x0 = 10, w = SCR_W - 20;
+    display->drawRect(x0, 80, w, 8, display->color565(80, 80, 80));
+    int fill = w * percent / 100;
+    if (fill > 2) display->fillRect(x0 + 1, 81, fill - 2, 6, display->color565(0, 200, 80));
+  }
+}
+
+void setupOTA() {
+  ArduinoOTA.setHostname(OTA_HOSTNAME);
+  ArduinoOTA.setPassword(OTA_PASSWORD);
+
+  ArduinoOTA.onStart([]() {
+    otaActive = true;
+    Serial.println("\n[ota] 开始接收固件…");
+    otaShow("OTA UPDATE", 0);
+  });
+
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    static int last = -1;
+    int p = total ? (int)((uint64_t)progress * 100 / total) : 0;
+    if (p != last) { last = p; otaShow("OTA UPDATE", p); }
+  });
+
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\n[ota] 完成，即将重启");
+    otaShow("OTA DONE", 100);
+    delay(500);
+    otaActive = false;
+  });
+
+  ArduinoOTA.onError([](ota_error_t e) {
+    const char* msg = "?";
+    switch (e) {
+      case OTA_AUTH_ERROR:    msg = "认证失败"; break;
+      case OTA_BEGIN_ERROR:   msg = "开始失败"; break;
+      case OTA_CONNECT_ERROR: msg = "连接失败"; break;
+      case OTA_RECEIVE_ERROR: msg = "接收失败"; break;
+      case OTA_END_ERROR:     msg = "结束失败"; break;
+    }
+    Serial.printf("[ota] 错误 %u: %s\n", e, msg);
+    otaShow("OTA FAIL", -1);
+    otaActive = false;
+  });
+
+  ArduinoOTA.begin();
+  Serial.printf("[ota] 就绪：%s.local 或当前 IP，密码已设置\n", OTA_HOSTNAME);
+}
+
+// ============================================================
 void setup() {
   Serial.begin(115200);
   delay(200);
@@ -1233,6 +1309,7 @@ void setup() {
     drawTextGap("IP", 0, 30, SCR_W, 14, display->color565(120, 120, 120));
     drawTextGap(WiFi.localIP().toString().c_str(), 0, 46, SCR_W, 20,
                 display->color565(255, 255, 255));
+    setupOTA();          // 无线升级：led-backpack.local，密码见 OTA_PASSWORD
   }
 
   // 对时
@@ -1253,6 +1330,13 @@ void setup() {
 
 // ============================================================
 void loop() {
+  ArduinoOTA.handle();          // 必须在最前，且不能被下面的 early return 跳过
+
+  if (otaActive) {              // 升级中不做常规刷新，避免覆盖进度画面
+    delay(5);
+    return;
+  }
+
   server.handleClient();
 
   static uint32_t lastAir = 0;
