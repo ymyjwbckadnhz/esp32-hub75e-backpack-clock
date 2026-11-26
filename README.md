@@ -263,6 +263,17 @@ PartitionScheme = min_spiffs   (1.9MB APP ×2 + 190KB SPIFFS)
 **Arduino IDE**：工具 → 端口 → 选 `led-backpack` 或 `led-backpack.local`（网络端口），
 输密码后正常点上传。
 
+**一键脚本**（推荐，绕开 IDE 的端口发现）：
+
+```powershell
+cd led-backpack-hub75e
+.\tools\ota.ps1                    # 默认 10.0.0.43
+.\tools\ota.ps1 -Ip 10.0.0.50      # 指定 IP
+.\tools\ota.ps1 -BuildOnly         # 只编译
+```
+
+脚本会：编译 → espota 推送 → 等设备重启 → 拉 `/api/status` 验证在线。
+
 **命令行**（不插 USB）：
 
 ```powershell
@@ -310,3 +321,27 @@ arduino-cli compile --fqbn esp32:esp32:esp32:PartitionScheme=min_spiffs `
 > 注意：`loadConfig()` 只在 `/config.json` **不存在**时才用默认值。
 > 如果之前已经生成过 config.json（哪怕内容是占位地址），改代码里的默认值不会生效，
 > 需要网页改一次、或格式化 LittleFS。
+### IDE 上传报 `invalid int value: '{upload.port.properties.port}'`
+
+这不是 OTA 服务的问题，而是**IDE 没拿到端口号**。
+
+判断方法：
+
+```powershell
+arduino-cli board list
+# 如果列表里没有设备的 IP，说明 mDNS 发现失败
+```
+
+已确认的两个诱因（本机实测）：
+
+1. **Bonjour 服务处于 Stopped** —— Windows 上 `.local` 域名解析不了，
+   `ping led-backpack.local` 失败。管理员启动：
+   ```powershell
+   net start "Bonjour Service"
+   ```
+2. **IDE 里残留了旧的网络端口条目**，属性为空，于是模板变量没被替换。
+
+**临时方案**：重启 IDE 后重新选择端口；或直接 `.\tools\ota.ps1`。
+
+> 注意 `arduino-cli board list` 里其它 ESP8266 设备能显示网络端口、而这台 ESP32
+> 不显示时，基本可以断定是本机 mDNS 解析（Bonjour）出了问题，而不是设备没广播。

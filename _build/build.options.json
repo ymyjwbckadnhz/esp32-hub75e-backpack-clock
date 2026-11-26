@@ -1,0 +1,9 @@
+{
+  "additionalFiles": "..\\..,..\\..,..\\..",
+  "compiler.optimization_flags": "-Os",
+  "customBuildProperties": "build.warn_data_percentage=75",
+  "fqbn": "esp32:esp32:esp32:PartitionScheme=min_spiffs",
+  "hardwareFolders": "C:\\Users\\23715\\AppData\\Local\\Arduino15\\packages",
+  "otherLibrariesFolders": "C:\\Users\\23715\\Documents\\Arduino\\libraries",
+  "sketchLocation": "X:\\DEV\\MCU\\Luat\\project\\led-backpack-hub75e\\src\\ntp_clock_bmpfont"
+}
