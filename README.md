@@ -263,7 +263,14 @@ PartitionScheme = min_spiffs   (1.9MB APP ×2 + 190KB SPIFFS)
 **Arduino IDE**：工具 → 端口 → 选 `led-backpack` 或 `led-backpack.local`（网络端口），
 输密码后正常点上传。
 
-**一键脚本**（推荐，绕开 IDE 的端口发现）：
+**双击上传**（最接近"插件"的体验）：
+
+双击 `tools\上传OTA.bat` → 提示当前 IP（回车沿用，或输入新的）→
+自动编译 + 推送 + 等待重启 + 验证在线。
+
+IP 存在 `tools\ota_ip.txt`（已 gitignore，不入库）。
+
+**一键脚本**（命令行）：
 
 ```powershell
 cd led-backpack-hub75e

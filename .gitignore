@@ -27,3 +27,6 @@ _build/
 *.sr
 _crop/
 _tmp/
+
+# 本地 OTA 目标 IP（含内网地址，不入库）
+ota_ip.txt

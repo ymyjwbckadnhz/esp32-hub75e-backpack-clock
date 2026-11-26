@@ -15,7 +15,7 @@
 
 [CmdletBinding()]
 param(
-  [string]$Ip = '10.0.0.43',
+  [string]$Ip = '',
   [int]$Port = 3232,
   [string]$Password = '2018aptx',
   [string]$Fqbn = 'esp32:esp32:esp32:PartitionScheme=min_spiffs',
@@ -24,6 +24,19 @@ param(
 )
 
 $ErrorActionPreference = 'Continue'   # 原生程序的 stderr 提示不应当作异常
+
+# 从 bat 里调用时控制台是 GBK，切一下输出编码，中文才不乱码
+if ($env:DSH_OTA_GBK) { try { [Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding(936) } catch {} }
+
+# 没指定 -Ip 时，从 tools\ota_ip.txt 读（该文件不入库）
+if (-not $Ip) {
+  $ipFile = Join-Path $PSScriptRoot 'ota_ip.txt'
+  if (Test-Path $ipFile) {
+    $Ip = (Get-Content $ipFile -Encoding UTF8 | Where-Object { $_ -match '^\s*\d' } | Select-Object -First 1)
+    if ($Ip) { $Ip = $Ip.Trim() }
+  }
+}
+if (-not $Ip) { $Ip = '192.168.1.43' }   # 占位，公开仓库不含真实内网 IP
 $repo = Split-Path $PSScriptRoot -Parent
 $sketch = Join-Path $repo 'src\ntp_clock_bmpfont'
 $build  = Join-Path $repo '_build'
