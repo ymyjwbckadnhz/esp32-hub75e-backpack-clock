@@ -931,7 +931,7 @@ void netSpeedStr(char* out, float kb) {
 }
 
 // 6 行 x 16px = 96，正好铺满屏幕，不能再留偏移，否则最后一行被顶出屏幕
-#define PC_TOP      0
+#define PC_TOP      (-2)   // 整体上移 2px（6 行 ×16px 正好铺满，原来贴着底边）
 #define PC_STALE_MS 15000   // 超过这么久没拿到数据才认为掉线
 #define PC_FALLBACK_MS PC_STALE_MS   // 无信号多久后回退显示时钟
 #define PC_RETRY_MS   5000           // 回退期间探测间隔（别用 1 秒，会拖慢时钟）
