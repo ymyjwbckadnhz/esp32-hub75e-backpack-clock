@@ -9,6 +9,11 @@
 
 ---
 
+> **仓库地址**
+> GitHub：https://github.com/ymyjwbckadnhz/esp32-hub75e-backpack-clock
+> Gitee 镜像：https://gitee.com/OvO_rain/esp32-hub75e-backpack-clock
+>
+> Gitee 为镜像，可能滞后于 GitHub，**以 GitHub 为准**。
 ## 硬件
 
 | 项 | 规格 |
